@@ -1,19 +1,23 @@
 environment:
   name: "Factory Robot Task Coordination"
-  description: "A simulation environment for coordinating mobile and static robots in an industrial factory workflow."
-  version: "1.0.0"
+  description: "A time-based simulation environment for coordinating mobile and static robots in an industrial factory workflow."
+  version: "2.0.0"
 
 observation_space:
-  jobs: "List of current jobs with their status"
-  mobile_robots: "List of mobile robots with their status"
-  static_robots: "List of static robots with their status"
+  jobs: "List of current jobs with transport and processing status, durations, remaining time, and assigned robots"
+  mobile_robots: "List of mobile robots with occupancy, busy time remaining, and current job"
+  static_robots: "List of static robots with occupancy, busy time remaining, and current job"
   time_step: "Current simulation time step integer"
+  metrics: "Episode-level statistics for action quality, robot utilization, progress, and total reward"
 
 action_space:
   transport: "Assign a mobile robot to transport a job. Format: ('transport', robot_id, job_id)"
   process: "Assign a static robot to process a job. Format: ('process', robot_id, job_id)"
+  wait: "Advance the simulation without a new assignment. Format: ('wait', None, None)"
 
 rewards:
-  successful_transport: 5
-  job_completed: 10
-  invalid_action: -2
+  valid_assignment: 1.0
+  transport_completed: 4.0
+  job_completed: 10.0
+  invalid_action: -3.0
+  idle_robot_penalty: 0.15

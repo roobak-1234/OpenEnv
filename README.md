@@ -1,58 +1,128 @@
 # Factory Robot OpenEnv Simulation
 
-A complete, OpenEnv-compatible backend-only Python simulation environment for a real-world factory system involving static and mobile robots.
+A backend-only Python simulation for training AI agents to coordinate mobile and static robots in a factory workflow.
 
-## Real-world Relevance
-In modern industrial settings, tasks are often distributed between autonomous mobile robots (AMRs) that transport materials, and static robotic arms or workstations that perform fixed tasks (e.g., assembly, welding). This environment simulates the complex coordination required to optimize these workflows, minimize idle time, and complete jobs efficiently.
+## What Changed
+
+This environment now models time instead of flipping jobs directly from "not started" to "done":
+- Mobile robots become busy for a job's `transport_time`
+- Static robots become busy for a job's `processing_time`
+- Jobs move through `in_transport`, `transported`, `in_process`, and `completed` states
+- The environment supports a `wait` action so agents can advance time when work is already in flight
+- The server creates isolated sessions per episode so multiple agents can interact safely in parallel
 
 ## Core Concepts
-- **Mobile Robots**: Handle transportation of jobs across the factory floor.
-- **Static Robots**: Handle the processing of jobs at fixed workstations.
-- **Jobs**: Entities that require transportation first, then processing to be completed.
+
+- **Mobile Robots** move work between stations
+- **Static Robots** process transported jobs at fixed workstations
+- **Jobs** have both `transport_time` and `processing_time`, which creates real scheduling tradeoffs
 
 ## Environment Interface
 
 ### State Space
+
 The environment state contains:
-- `jobs`: List of current jobs and their statuses (id, processing_time, transported, completed)
-- `mobile_robots`: List of mobile robots and their statuses
-- `static_robots`: List of static robots and their statuses
-- `time_step`: Current simulation time step integer
+- `jobs`: transport and processing durations, remaining time, assignment fields, and completion flags
+- `mobile_robots`: robot status, busy time remaining, and current assignment
+- `static_robots`: robot status, busy time remaining, and current assignment
+- `time_step`: current simulation tick
+- `metrics`: episode statistics such as valid actions, invalid actions, robot utilization, jobs transported, jobs completed, and total reward
 
 ### Action Space
+
 Actions are tuples of the form `(action_type, robot_id, job_id)`.
-- `("transport", robot_id, job_id)`: Assigns a mobile robot to transport a job.
-- `("process", robot_id, job_id)`: Assigns a static robot to process a transported job.
+- `("transport", robot_id, job_id)`: assign an idle mobile robot to an untransported job
+- `("process", robot_id, job_id)`: assign an idle static robot to a transported job
+- `("wait", None, None)`: advance the simulation without issuing a new assignment
 
 ### Reward Function
-- **+5**: Successful transport action
-- **+10**: Successful job completion step
-- **-2**: Invalid action (e.g., trying to process a job that isn't transported, or using a static robot for transport)
+
+Rewards now mix action validity, finished work, and utilization:
+- valid assignments earn a small shaping reward
+- completed transports and completed jobs earn progress rewards
+- invalid actions are penalized
+- idle robots create a small penalty while unfinished work remains
+
+### Scoring
+
+The grader combines:
+- completion ratio
+- time efficiency versus a theoretical lower bound
+- action quality based on valid versus invalid actions
+
+This makes the score much more useful for learning than completion alone.
 
 ## Task Levels
-- `easy`: 2 jobs, 1 mobile robot, 1 static robot.
-- `medium`: 5 jobs, 2 mobile robots, 2 static robots. 
-- `hard`: 15 jobs, 3 mobile robots, 3 static robots.
+
+- `easy`: 2 jobs, 1 mobile robot, 1 static robot
+- `medium`: 5 jobs, 2 mobile robots, 2 static robots
+- `hard`: 15 jobs, 3 mobile robots, 3 static robots
+
+## API Contract
+
+### `POST /reset`
+
+Creates a fresh session and returns:
+- `session_id`
+- `task`
+- `state`
+
+Optional JSON body:
+
+```json
+{"task": "medium"}
+```
+
+### `POST /step`
+
+Requires:
+
+```json
+{
+  "session_id": "your-session-id",
+  "action": ["transport", "m_1", "job_1"]
+}
+```
+
+Malformed actions are rejected with a client error instead of crashing the server.
 
 ## Setup and Running Locally
 
 1. Create a virtual environment and activate it.
 2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+
+```bash
+pip install -r requirements.txt
+```
+
 3. Run the baseline simulation:
-   ```bash
-   python main.py
-   ```
+
+```bash
+python main.py
+```
+
+4. Run the API server:
+
+```bash
+uvicorn server:app --reload
+```
+
+5. Run the HTTP inference client against the server:
+
+```bash
+python inference.py
+```
 
 ## Docker Instructions
 
 1. Build the Docker image:
-   ```bash
-   docker build -t factory-robot-env .
-   ```
-2. Run the Docker container:
-   ```bash
-   docker run --rm factory-robot-env
-   ```
+
+```bash
+docker build -t factory-robot-env .
+```
+
+2. Run the container:
+
+```bash
+docker run --rm -p 8000:8000 factory-robot-env
+```
