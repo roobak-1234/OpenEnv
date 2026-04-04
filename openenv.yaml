@@ -1,0 +1,19 @@
+environment:
+  name: "Factory Robot Task Coordination"
+  description: "A simulation environment for coordinating mobile and static robots in an industrial factory workflow."
+  version: "1.0.0"
+
+observation_space:
+  jobs: "List of current jobs with their status"
+  mobile_robots: "List of mobile robots with their status"
+  static_robots: "List of static robots with their status"
+  time_step: "Current simulation time step integer"
+
+action_space:
+  transport: "Assign a mobile robot to transport a job. Format: ('transport', robot_id, job_id)"
+  process: "Assign a static robot to process a job. Format: ('process', robot_id, job_id)"
+
+rewards:
+  successful_transport: 5
+  job_completed: 10
+  invalid_action: -2
