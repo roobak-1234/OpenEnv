@@ -7,7 +7,7 @@ sdk: docker
 app_port: 7860
 pinned: false
 license: mit
-short_description: OpenEnv-compatible factory robot coordination benchmark with FastAPI and Docker.
+short_description: Factory robot coordination benchmark.
 ---
 
 # Factory Robot OpenEnv Simulation
