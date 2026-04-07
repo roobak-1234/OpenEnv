@@ -1,3 +1,15 @@
+---
+title: OpenEnv Factory Robots
+emoji: "🤖"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: OpenEnv-compatible factory robot coordination benchmark with FastAPI and Docker.
+---
+
 # Factory Robot OpenEnv Simulation
 
 A backend-only Python simulation for training AI agents to coordinate mobile and static robots in a factory workflow.
