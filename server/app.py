@@ -1,9 +1,10 @@
+import os
 from typing import Literal
 from uuid import uuid4
 
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-import uvicorn
 
 from env.models import FactoryAction, FactoryObservation
 from tasks.easy import create_env as create_easy_env
@@ -81,7 +82,8 @@ def healthcheck() -> dict[str, str]:
 
 
 def main() -> None:
-    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "7860"))
+    uvicorn.run("server.app:app", host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
