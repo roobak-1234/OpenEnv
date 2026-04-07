@@ -76,6 +76,15 @@ The grader combines:
 
 This makes the score much more useful for learning than completion alone.
 
+## Baseline Scores
+
+Reference baseline from `inference.py` against the deployed Hugging Face Space using the OpenAI client with `MODEL_NAME=openai/gpt-4.1-mini`:
+- `easy`: `0.929`
+- `medium`: `0.909`
+- `hard`: `0.863`
+
+These runs completed successfully with normalized per-task scores in the required `0.0` to `1.0` range.
+
 ## Task Levels
 
 - `easy`: 2 jobs, 1 mobile robot, 1 static robot
