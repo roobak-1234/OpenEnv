@@ -32,8 +32,21 @@ def grade(state: Dict[str, Any]) -> float:
     invalid_actions = metrics.get("invalid_actions", 0)
     total_actions = valid_actions + invalid_actions
     action_quality = (valid_actions / total_actions) if total_actions else 1.0
+    on_time_ratio = (
+        metrics.get("on_time_completions", 0) / max(completed_jobs, 1)
+        if completed_jobs
+        else 0.0
+    )
+    late_penalty = metrics.get("late_completions", 0) / len(jobs)
 
-    score = (0.6 * completion_ratio) + (0.25 * time_efficiency) + (0.15 * action_quality)
+    score = (
+        (0.45 * completion_ratio)
+        + (0.20 * time_efficiency)
+        + (0.15 * action_quality)
+        + (0.20 * on_time_ratio)
+        - (0.10 * late_penalty)
+    )
+    score = max(0.0, min(1.0, score))
     return round(score, 4)
 
 

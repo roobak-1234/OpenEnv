@@ -7,12 +7,18 @@ class Job(BaseModel):
     id: str
     transport_time: int = Field(ge=1)
     processing_time: int = Field(ge=1)
+    required_station_type: Literal["assembly", "welding", "inspection"] = "assembly"
+    priority: int = Field(default=1, ge=1, le=5)
+    due_step: int = Field(default=1, ge=1)
     transported: bool = False
     completed: bool = False
+    late: bool = False
+    completed_on_time: bool = False
     in_transport: bool = False
     in_process: bool = False
     transport_remaining_time: int = 0
     processing_remaining_time: int = 0
+    accumulated_wait_time: int = 0
     assigned_mobile_robot_id: Optional[str] = None
     assigned_static_robot_id: Optional[str] = None
 
@@ -21,6 +27,8 @@ class Robot(BaseModel):
     id: str
     type: Literal["mobile", "static"]
     status: Literal["idle", "busy"] = "idle"
+    capability: Optional[Literal["assembly", "welding", "inspection"]] = None
+    home_zone: str = "dispatch"
     busy_time_remaining: int = 0
     current_job_id: Optional[str] = None
     current_task: Optional[Literal["transport", "process"]] = None
@@ -32,6 +40,8 @@ class EpisodeMetrics(BaseModel):
     wait_actions: int = 0
     jobs_transported: int = 0
     jobs_completed: int = 0
+    on_time_completions: int = 0
+    late_completions: int = 0
     busy_robot_ticks: int = 0
     idle_robot_ticks: int = 0
     total_reward: float = 0.0

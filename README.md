@@ -18,7 +18,7 @@ The repository is organized as a benchmark package:
 - `env/`: typed environment models, state transitions, and reward shaping
 - `tasks/`: easy, medium, and hard task factories
 - `grader/`: deterministic normalized scoring helpers
-- `server.py`: FastAPI wrapper exposing `reset`, `step`, and `state`
+- `server/`: FastAPI wrapper exposing `reset`, `step`, and `state`
 - `inference.py`: baseline multi-task inference runner with OpenAI client support
 
 ## What Changed
@@ -27,23 +27,25 @@ This environment now models time instead of flipping jobs directly from "not sta
 - Mobile robots become busy for a job's `transport_time`
 - Static robots become busy for a job's `processing_time`
 - Jobs move through `in_transport`, `transported`, `in_process`, and `completed` states
+- Jobs carry due steps, priorities, and required workstation types
+- Static robots can only process jobs that match their capability, which creates routing constraints
 - The environment supports a `wait` action so agents can advance time when work is already in flight
 - The server creates isolated sessions per episode so multiple agents can interact safely in parallel
 
 ## Core Concepts
 
 - **Mobile Robots** move work between stations
-- **Static Robots** process transported jobs at fixed workstations
-- **Jobs** have both `transport_time` and `processing_time`, which creates real scheduling tradeoffs
+- **Static Robots** process transported jobs at fixed workstations and each robot has a capability such as assembly, welding, or inspection
+- **Jobs** have transport times, processing times, due steps, priorities, and required station types, which creates real scheduling tradeoffs
 
 ## Environment Interface
 
 ### State Space
 
 The environment state contains:
-- `jobs`: transport and processing durations, remaining time, assignment fields, and completion flags
+- `jobs`: transport and processing durations, due steps, priorities, required station type, remaining time, assignment fields, and completion flags
 - `mobile_robots`: robot status, busy time remaining, and current assignment
-- `static_robots`: robot status, busy time remaining, and current assignment
+- `static_robots`: robot status, busy time remaining, current assignment, and capability
 - `time_step`: current simulation tick
 - `metrics`: episode statistics such as valid actions, invalid actions, robot utilization, jobs transported, jobs completed, and total reward
 
@@ -59,6 +61,7 @@ Actions are tuples of the form `(action_type, robot_id, job_id)`.
 Rewards now mix action validity, finished work, and utilization:
 - valid assignments earn a small shaping reward
 - completed transports and completed jobs earn progress rewards
+- on-time completions earn an extra bonus and late completions are penalized
 - invalid actions receive the lowest possible reward
 - idle robots create a small penalty while unfinished work remains
 - per-step rewards are normalized into the `0.0` to `1.0` range for cleaner evaluator integration
@@ -69,6 +72,7 @@ The grader combines:
 - completion ratio
 - time efficiency versus a theoretical lower bound
 - action quality based on valid versus invalid actions
+- on-time completion ratio and lateness penalty
 
 This makes the score much more useful for learning than completion alone.
 
@@ -136,7 +140,7 @@ python main.py
 4. Run the API server:
 
 ```bash
-uvicorn server:app --reload
+uvicorn server.app:app --reload --port 7860
 ```
 
 5. Run the HTTP inference client against the server:
@@ -162,5 +166,5 @@ docker build -t factory-robot-env .
 2. Run the container:
 
 ```bash
-docker run --rm -p 8000:8000 factory-robot-env
+docker run --rm -p 7860:7860 factory-robot-env
 ```

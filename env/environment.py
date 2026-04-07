@@ -54,6 +54,8 @@ class FactoryEnv:
         self.metrics["busy_robot_ticks"] += busy_robots
         self.metrics["idle_robot_ticks"] += idle_robots
 
+        waiting_jobs = self._count_waiting_jobs()
+        self._increment_wait_times()
         progress = self._advance_time()
         unfinished_jobs = sum(1 for job in self.jobs if not job.completed)
 
@@ -62,8 +64,11 @@ class FactoryEnv:
             action_type=action_type if valid else None,
             transports_completed=progress["transports_completed"],
             jobs_completed=progress["jobs_completed"],
+            on_time_completions=progress["on_time_completions"],
+            late_completions=progress["late_completions"],
             idle_robots=idle_robots,
             unfinished_jobs=unfinished_jobs,
+            waiting_jobs=waiting_jobs,
         )
 
         self.time_step += 1
@@ -80,6 +85,8 @@ class FactoryEnv:
 
         self.metrics["jobs_transported"] += progress["transports_completed"]
         self.metrics["jobs_completed"] += progress["jobs_completed"]
+        self.metrics["on_time_completions"] += progress["on_time_completions"]
+        self.metrics["late_completions"] += progress["late_completions"]
         self.metrics["total_reward"] = round(self.metrics["total_reward"] + reward, 2)
 
         return self.state(), reward, self._is_done(), info
@@ -94,6 +101,8 @@ class FactoryEnv:
             "wait_actions": 0,
             "jobs_transported": 0,
             "jobs_completed": 0,
+            "on_time_completions": 0,
+            "late_completions": 0,
             "busy_robot_ticks": 0,
             "idle_robot_ticks": 0,
             "total_reward": 0.0,
@@ -157,6 +166,11 @@ class FactoryEnv:
                 return False, f"Static robot {robot.id} is currently busy."
             if not target_job.transported or target_job.completed or target_job.in_process:
                 return False, f"Job {target_job.id} is not ready for processing."
+            if robot.capability != target_job.required_station_type:
+                return False, (
+                    f"Static robot {robot.id} cannot process station type "
+                    f"{target_job.required_station_type}."
+                )
 
             self._assign_robot(robot=robot, job=target_job, task="process", duration=target_job.processing_time)
             info["events"].append(f"processing_started:{target_job.id}:{robot.id}")
@@ -183,6 +197,8 @@ class FactoryEnv:
         events: List[str] = []
         transports_completed = 0
         jobs_completed = 0
+        on_time_completions = 0
+        late_completions = 0
 
         for robot in list(self.mobile_robots.values()) + list(self.static_robots.values()):
             if robot.status != "busy":
@@ -217,6 +233,13 @@ class FactoryEnv:
                 target_job.processing_remaining_time = 0
                 target_job.assigned_static_robot_id = None
                 jobs_completed += 1
+                completion_step = self.time_step + 1
+                target_job.completed_on_time = completion_step <= target_job.due_step
+                target_job.late = not target_job.completed_on_time
+                if target_job.completed_on_time:
+                    on_time_completions += 1
+                else:
+                    late_completions += 1
                 events.append(f"processing_completed:{target_job.id}:{robot.id}")
 
             self._release_robot(robot)
@@ -225,6 +248,8 @@ class FactoryEnv:
             "events": events,
             "transports_completed": transports_completed,
             "jobs_completed": jobs_completed,
+            "on_time_completions": on_time_completions,
+            "late_completions": late_completions,
         }
 
     def _release_robot(self, robot: Robot) -> None:
@@ -237,6 +262,19 @@ class FactoryEnv:
         robots = list(self.mobile_robots.values()) + list(self.static_robots.values())
         busy_robots = sum(1 for robot in robots if robot.status == "busy")
         return busy_robots, len(robots) - busy_robots
+
+    def _count_waiting_jobs(self) -> int:
+        return sum(
+            1
+            for job in self.jobs
+            if not job.completed and not job.in_transport and not job.in_process
+        )
+
+    def _increment_wait_times(self) -> None:
+        for job in self.jobs:
+            if job.completed or job.in_transport or job.in_process:
+                continue
+            job.accumulated_wait_time += 1
 
     def _find_job(self, job_id: Optional[str]) -> Optional[Job]:
         if job_id is None:

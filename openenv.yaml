@@ -16,9 +16,9 @@ tasks:
     grader: "grader.grade_task('hard', state)"
 
 observation_space:
-  jobs: "List of current jobs with transport and processing status, durations, remaining time, and assigned robots"
+  jobs: "List of current jobs with transport and processing status, durations, due step, priority, required station type, remaining time, and assigned robots"
   mobile_robots: "List of mobile robots with occupancy, busy time remaining, and current job"
-  static_robots: "List of static robots with occupancy, busy time remaining, and current job"
+  static_robots: "List of static robots with occupancy, busy time remaining, current job, and capability"
   time_step: "Current simulation time step integer"
   metrics: "Episode-level statistics for action quality, robot utilization, progress, and total reward"
 
@@ -34,10 +34,13 @@ action_space:
 
 rewards:
   valid_assignment: 0.10
-  transport_completed: 0.20
-  job_completed: 0.50
+  transport_completed: 0.15
+  job_completed: 0.35
+  on_time_completion_bonus: 0.20
+  late_completion_penalty: 0.10
   invalid_action: 0.00
-  idle_robot_penalty: 0.03
+  idle_robot_penalty: 0.02
+  waiting_job_penalty: 0.01
   normalized_range: "[0.0, 1.0]"
 
 api:
