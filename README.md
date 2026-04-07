@@ -8,6 +8,11 @@ app_port: 7860
 pinned: false
 license: mit
 short_description: Factory robot coordination benchmark.
+tags:
+- openenv
+- robotics
+- scheduling
+- simulation
 ---
 
 # Factory Robot OpenEnv Simulation
