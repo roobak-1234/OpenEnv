@@ -1,8 +1,8 @@
-ASSIGNMENT_REWARD = 1.0
-TRANSPORT_COMPLETION_REWARD = 4.0
-JOB_COMPLETION_REWARD = 10.0
-INVALID_ACTION_PENALTY = -3.0
-IDLE_ROBOT_PENALTY = 0.15
+ASSIGNMENT_REWARD = 0.10
+TRANSPORT_COMPLETION_REWARD = 0.20
+JOB_COMPLETION_REWARD = 0.50
+INVALID_ACTION_REWARD = 0.00
+IDLE_ROBOT_PENALTY = 0.03
 
 
 def calculate_reward(
@@ -14,7 +14,7 @@ def calculate_reward(
     unfinished_jobs: int = 0,
 ) -> float:
     if not action_valid:
-        return INVALID_ACTION_PENALTY
+        return INVALID_ACTION_REWARD
 
     reward = 0.0
 
@@ -27,4 +27,5 @@ def calculate_reward(
     if unfinished_jobs > 0:
         reward -= idle_robots * IDLE_ROBOT_PENALTY
 
+    reward = max(0.0, min(1.0, reward))
     return round(reward, 2)

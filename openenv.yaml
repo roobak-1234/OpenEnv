@@ -2,6 +2,18 @@ environment:
   name: "Factory Robot Task Coordination"
   description: "A time-based simulation environment for coordinating mobile and static robots in an industrial factory workflow."
   version: "2.0.0"
+  benchmark: "factory_robot_openenv"
+
+tasks:
+  - name: "easy"
+    description: "2 jobs, 1 mobile robot, 1 static robot"
+    grader: "grader.grade_task('easy', state)"
+  - name: "medium"
+    description: "5 jobs, 2 mobile robots, 2 static robots"
+    grader: "grader.grade_task('medium', state)"
+  - name: "hard"
+    description: "15 jobs, 3 mobile robots, 3 static robots"
+    grader: "grader.grade_task('hard', state)"
 
 observation_space:
   jobs: "List of current jobs with transport and processing status, durations, remaining time, and assigned robots"
@@ -10,14 +22,25 @@ observation_space:
   time_step: "Current simulation time step integer"
   metrics: "Episode-level statistics for action quality, robot utilization, progress, and total reward"
 
+typed_models:
+  observation: "env.models.FactoryObservation"
+  action: "env.models.FactoryAction"
+  reward: "env.models.FactoryReward"
+
 action_space:
   transport: "Assign a mobile robot to transport a job. Format: ('transport', robot_id, job_id)"
   process: "Assign a static robot to process a job. Format: ('process', robot_id, job_id)"
   wait: "Advance the simulation without a new assignment. Format: ('wait', None, None)"
 
 rewards:
-  valid_assignment: 1.0
-  transport_completed: 4.0
-  job_completed: 10.0
-  invalid_action: -3.0
-  idle_robot_penalty: 0.15
+  valid_assignment: 0.10
+  transport_completed: 0.20
+  job_completed: 0.50
+  invalid_action: 0.00
+  idle_robot_penalty: 0.03
+  normalized_range: "[0.0, 1.0]"
+
+api:
+  reset: "POST /reset"
+  step: "POST /step"
+  state: "GET /state"

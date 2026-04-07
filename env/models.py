@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class Job(BaseModel):
@@ -24,3 +24,45 @@ class Robot(BaseModel):
     busy_time_remaining: int = 0
     current_job_id: Optional[str] = None
     current_task: Optional[Literal["transport", "process"]] = None
+
+
+class EpisodeMetrics(BaseModel):
+    valid_actions: int = 0
+    invalid_actions: int = 0
+    wait_actions: int = 0
+    jobs_transported: int = 0
+    jobs_completed: int = 0
+    busy_robot_ticks: int = 0
+    idle_robot_ticks: int = 0
+    total_reward: float = 0.0
+
+
+class FactoryObservation(BaseModel):
+    jobs: list[Job]
+    mobile_robots: list[Robot]
+    static_robots: list[Robot]
+    time_step: int = Field(ge=0)
+    metrics: EpisodeMetrics
+
+
+class FactoryAction(BaseModel):
+    action_type: Literal["transport", "process", "wait"]
+    robot_id: Optional[str] = None
+    job_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_action_fields(self) -> "FactoryAction":
+        if self.action_type == "wait":
+            return self
+
+        if not self.robot_id or not self.job_id:
+            raise ValueError("transport/process actions require robot_id and job_id.")
+
+        return self
+
+    def as_tuple(self) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        return (self.action_type, self.robot_id, self.job_id)
+
+
+class FactoryReward(BaseModel):
+    value: float

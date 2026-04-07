@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from .models import Job, Robot
+from .models import EpisodeMetrics, FactoryAction, FactoryObservation, Job, Robot
 from .reward import calculate_reward
 
 
@@ -16,7 +16,7 @@ class FactoryEnv:
         self.metrics: Dict[str, Any] = {}
         self.reset()
 
-    def reset(self) -> Dict[str, Any]:
+    def reset(self) -> FactoryObservation:
         self.jobs = [job.model_copy() for job in self.initial_jobs]
         self.mobile_robots = {robot.id: robot.model_copy() for robot in self.initial_mobile_robots}
         self.static_robots = {robot.id: robot.model_copy() for robot in self.initial_static_robots}
@@ -24,19 +24,19 @@ class FactoryEnv:
         self.metrics = self._fresh_metrics()
         return self.state()
 
-    def state(self) -> Dict[str, Any]:
-        return {
-            "jobs": [job.model_dump() for job in self.jobs],
-            "mobile_robots": [self.mobile_robots[robot_id].model_dump() for robot_id in sorted(self.mobile_robots)],
-            "static_robots": [self.static_robots[robot_id].model_dump() for robot_id in sorted(self.static_robots)],
-            "time_step": self.time_step,
-            "metrics": dict(self.metrics),
-        }
+    def state(self) -> FactoryObservation:
+        return FactoryObservation(
+            jobs=[job.model_copy() for job in self.jobs],
+            mobile_robots=[self.mobile_robots[robot_id].model_copy() for robot_id in sorted(self.mobile_robots)],
+            static_robots=[self.static_robots[robot_id].model_copy() for robot_id in sorted(self.static_robots)],
+            time_step=self.time_step,
+            metrics=EpisodeMetrics(**self.metrics),
+        )
 
     def step(
         self,
-        action: Tuple[Optional[str], Optional[str], Optional[str]] | List[Optional[str]],
-    ) -> Tuple[Dict[str, Any], float, bool, Dict[str, Any]]:
+        action: FactoryAction | Tuple[Optional[str], Optional[str], Optional[str]] | List[Optional[str]],
+    ) -> Tuple[FactoryObservation, float, bool, Dict[str, Any]]:
         normalized_action, validation_error = self._normalize_action(action)
         action_type, robot_id, job_id = normalized_action
 
@@ -101,8 +101,11 @@ class FactoryEnv:
 
     def _normalize_action(
         self,
-        action: Tuple[Optional[str], Optional[str], Optional[str]] | List[Optional[str]] | Any,
+        action: FactoryAction | Tuple[Optional[str], Optional[str], Optional[str]] | List[Optional[str]] | Any,
     ) -> Tuple[Tuple[Optional[str], Optional[str], Optional[str]], Optional[str]]:
+        if isinstance(action, FactoryAction):
+            return action.as_tuple(), None
+
         if not isinstance(action, (list, tuple)):
             return (None, None, None), "Action must be a list or tuple of length 3."
 

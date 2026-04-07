@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+import uvicorn
 
 from env.models import FactoryAction, FactoryObservation
 from tasks.easy import create_env as create_easy_env
@@ -77,3 +78,11 @@ def state_env(session_id: str) -> StateResponse:
 @app.get("/")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def main() -> None:
+    uvicorn.run("server.app:app", host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    main()

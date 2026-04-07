@@ -1,6 +1,10 @@
 import math
 from typing import Any, Dict
 
+
+TASK_NAMES = ("easy", "medium", "hard")
+
+
 def grade(state: Dict[str, Any]) -> float:
     jobs = state.get("jobs", [])
     if not jobs:
@@ -31,3 +35,13 @@ def grade(state: Dict[str, Any]) -> float:
 
     score = (0.6 * completion_ratio) + (0.25 * time_efficiency) + (0.15 * action_quality)
     return round(score, 4)
+
+
+def grade_task(task_name: str, state: Dict[str, Any]) -> float:
+    if task_name not in TASK_NAMES:
+        raise ValueError(f"Unsupported task '{task_name}'. Expected one of {TASK_NAMES}.")
+    return grade(state)
+
+
+def list_tasks() -> list[str]:
+    return list(TASK_NAMES)

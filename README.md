@@ -2,6 +2,13 @@
 
 A backend-only Python simulation for training AI agents to coordinate mobile and static robots in a factory workflow.
 
+The repository is organized as a benchmark package:
+- `env/`: typed environment models, state transitions, and reward shaping
+- `tasks/`: easy, medium, and hard task factories
+- `grader/`: deterministic normalized scoring helpers
+- `server.py`: FastAPI wrapper exposing `reset`, `step`, and `state`
+- `inference.py`: baseline multi-task inference runner with OpenAI client support
+
 ## What Changed
 
 This environment now models time instead of flipping jobs directly from "not started" to "done":
@@ -40,8 +47,9 @@ Actions are tuples of the form `(action_type, robot_id, job_id)`.
 Rewards now mix action validity, finished work, and utilization:
 - valid assignments earn a small shaping reward
 - completed transports and completed jobs earn progress rewards
-- invalid actions are penalized
+- invalid actions receive the lowest possible reward
 - idle robots create a small penalty while unfinished work remains
+- per-step rewards are normalized into the `0.0` to `1.0` range for cleaner evaluator integration
 
 ### Scoring
 
@@ -80,11 +88,23 @@ Requires:
 ```json
 {
   "session_id": "your-session-id",
-  "action": ["transport", "m_1", "job_1"]
+  "action": {
+    "action_type": "transport",
+    "robot_id": "m_1",
+    "job_id": "job_1"
+  }
 }
 ```
 
 Malformed actions are rejected with a client error instead of crashing the server.
+
+### `GET /state`
+
+Returns the current observation for a session:
+
+```text
+/state?session_id=<your-session-id>
+```
 
 ## Setup and Running Locally
 
@@ -112,6 +132,12 @@ uvicorn server:app --reload
 ```bash
 python inference.py
 ```
+
+The inference script:
+- uses the OpenAI client for model calls
+- reads `API_BASE_URL`, `MODEL_NAME`, and `HF_TOKEN` or `OPENAI_API_KEY`
+- reads `ENV_BASE_URL` for the environment server
+- emits `[START]`, `[STEP]`, and `[END]` logs with normalized scores for each task
 
 ## Docker Instructions
 

@@ -1,12 +1,54 @@
 import os
-import random
+import json
+import textwrap
+from typing import Any
 
 import requests
+from openai import OpenAI
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-MODEL_NAME = os.getenv("MODEL_NAME", "baseline")
-HF_TOKEN = os.getenv("HF_TOKEN", "")
-TASK_LEVEL = os.getenv("TASK_LEVEL", "medium")
+from env.models import FactoryAction
+from grader.grader import grade_task, list_tasks
+
+API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("API_KEY") or "missing-api-key"
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4.1-mini")
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:8000")
+TASK_CONFIG = os.getenv("TASK_LEVEL") or os.getenv("TASKS") or "easy,medium,hard"
+BENCHMARK = os.getenv("BENCHMARK_NAME", "factory_robot_openenv")
+MAX_STEPS = int(os.getenv("MAX_STEPS", "100"))
+SUCCESS_SCORE_THRESHOLD = float(os.getenv("SUCCESS_SCORE_THRESHOLD", "0.6"))
+MODEL_CALLS_ENABLED = True
+
+SYSTEM_PROMPT = textwrap.dedent(
+    """
+    You are scheduling work inside a factory simulation.
+    Return exactly one JSON object with keys: action_type, robot_id, job_id.
+    Valid action_type values: transport, process, wait.
+    Use wait when every useful robot is already busy or no job is ready.
+    """
+).strip()
+
+
+def parse_tasks() -> list[str]:
+    requested = [part.strip() for part in TASK_CONFIG.split(",") if part.strip()]
+    valid_tasks = set(list_tasks())
+    return [task for task in requested if task in valid_tasks] or list_tasks()
+
+
+def observation_summary(state: dict[str, Any]) -> str:
+    jobs = state.get("jobs", [])
+    mobile = state.get("mobile_robots", [])
+    static = state.get("static_robots", [])
+    return json.dumps(
+        {
+            "time_step": state.get("time_step", 0),
+            "jobs": jobs,
+            "mobile_robots": mobile,
+            "static_robots": static,
+            "metrics": state.get("metrics", {}),
+        },
+        separators=(",", ":"),
+    )
 
 
 def choose_action(state):
@@ -20,7 +62,7 @@ def choose_action(state):
     ]
     if idle_static_ids and ready_for_processing:
         job = max(ready_for_processing, key=lambda item: (item["processing_time"], -item["transport_time"]))
-        return ["process", random.choice(idle_static_ids), job["id"]]
+        return {"action_type": "process", "robot_id": idle_static_ids[0], "job_id": job["id"]}
 
     ready_for_transport = [
         job for job in jobs
@@ -28,54 +70,145 @@ def choose_action(state):
     ]
     if idle_mobile_ids and ready_for_transport:
         job = max(ready_for_transport, key=lambda item: (item["processing_time"], -item["transport_time"]))
-        return ["transport", random.choice(idle_mobile_ids), job["id"]]
+        return {"action_type": "transport", "robot_id": idle_mobile_ids[0], "job_id": job["id"]}
 
-    return ["wait", None, None]
+    return {"action_type": "wait", "robot_id": None, "job_id": None}
 
-def run_inference():
-    print(f"[START] task=factory_robot env=openenv model={MODEL_NAME}")
+
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
+
+
+def log_step(step: int, action: str, reward: float, done: bool, error: str | None) -> None:
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={str(done).lower()} error={error or 'null'}",
+        flush=True,
+    )
+
+
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
+    rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    print(
+        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        flush=True,
+    )
+
+
+def action_to_string(action: dict[str, Any]) -> str:
+    return f"({action.get('action_type')}, {action.get('robot_id')}, {action.get('job_id')})"
+
+
+def extract_json_object(text: str) -> dict[str, Any]:
+    candidate = text.strip()
+    if "```" in candidate:
+        parts = [part.strip() for part in candidate.split("```") if part.strip()]
+        candidate = parts[-1]
+        if candidate.lower().startswith("json"):
+            candidate = candidate[4:].strip()
+
+    start = candidate.find("{")
+    end = candidate.rfind("}")
+    if start == -1 or end == -1 or start >= end:
+        raise ValueError("No JSON object found in model output.")
+
+    return json.loads(candidate[start : end + 1])
+
+
+def get_model_action(client: OpenAI, task_name: str, step: int, state: dict[str, Any], history: list[str]) -> dict[str, Any]:
+    global MODEL_CALLS_ENABLED
+    heuristic = choose_action(state)
+    if not MODEL_CALLS_ENABLED:
+        return heuristic
+
+    prompt = textwrap.dedent(
+        f"""
+        Task: {task_name}
+        Step: {step}
+        Recent history: {history[-3:] if history else []}
+        Current observation JSON:
+        {observation_summary(state)}
+        Respond with one JSON object only.
+        """
+    ).strip()
 
     try:
-        resp = requests.post(f"{API_BASE_URL}/reset", json={"task": TASK_LEVEL})
-        resp.raise_for_status()
-        reset_payload = resp.json()
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+            max_tokens=120,
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        payload = extract_json_object(text)
+        action = FactoryAction(**payload)
+        return action.model_dump()
+    except Exception:
+        MODEL_CALLS_ENABLED = False
+        return heuristic
+
+def run_task(client: OpenAI, task_name: str) -> None:
+    rewards: list[float] = []
+    history: list[str] = []
+    steps_taken = 0
+    score = 0.0
+    success = False
+    final_state: dict[str, Any] = {}
+
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+
+    try:
+        reset_response = requests.post(f"{ENV_BASE_URL}/reset", json={"task": task_name}, timeout=30)
+        reset_response.raise_for_status()
+        reset_payload = reset_response.json()
         session_id = reset_payload["session_id"]
         state = reset_payload["state"]
 
         done = False
-        steps = 0
-        rewards = []
-        max_steps = 100
+        for step in range(1, MAX_STEPS + 1):
+            if done:
+                break
 
-        while not done and steps < max_steps:
-            action = choose_action(state)
+            action = get_model_action(client, task_name, step, state, history)
 
-            resp = requests.post(
-                f"{API_BASE_URL}/step",
+            step_response = requests.post(
+                f"{ENV_BASE_URL}/step",
                 json={"session_id": session_id, "action": action},
+                timeout=30,
             )
-            resp.raise_for_status()
-            data = resp.json()
+            step_response.raise_for_status()
+            payload = step_response.json()
 
-            state = data.get("state", {})
-            reward = float(data.get("reward", 0.0))
-            done = data.get("done", False)
-            info = data.get("info", {})
+            state = payload.get("state", {})
+            final_state = state
+            reward = float(payload.get("reward", 0.0))
+            done = bool(payload.get("done", False))
+            info = payload.get("info", {})
+            error = info.get("error")
+
             rewards.append(reward)
+            steps_taken = step
+            log_step(step=step, action=action_to_string(action), reward=reward, done=done, error=error)
+            history.append(f"step={step} action={action_to_string(action)} reward={reward:.2f}")
 
-            done_str = "true" if done else "false"
-            action_str = f"({action[0]}, {action[1]}, {action[2]})" if len(action) == 3 else str(action)
-            error = info.get("error", "null")
-            print(f"[STEP] step={steps+1} action={action_str} reward={reward:.2f} done={done_str} error={error}")
-            steps += 1
+            if done:
+                break
 
-        success_str = "true" if done else "false"
-        rewards_str = ",".join([f"{r:.2f}" for r in rewards])
-        print(f"[END] success={success_str} steps={steps} rewards={rewards_str}")
+        if final_state:
+            score = max(0.0, min(1.0, float(grade_task(task_name, final_state))))
+        success = score >= SUCCESS_SCORE_THRESHOLD
+    except Exception:
+        success = False
+    finally:
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
-    except Exception as e:
-        print(f"[STEP] step=0 action=none reward=0.00 done=true error={str(e)}")
-        print(f"[END] success=false steps=0 rewards=")
+
+def run_inference():
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY, max_retries=0, timeout=5.0)
+    for task_name in parse_tasks():
+        run_task(client, task_name)
 
 if __name__ == "__main__":
     run_inference()

@@ -1,5 +1,3 @@
-import random
-
 from tasks.medium import create_env
 from grader.grader import grade
 
@@ -23,14 +21,14 @@ def choose_action(state):
     ]
     if idle_mobile_ids and ready_for_transport:
         job = max(ready_for_transport, key=lambda item: (item["processing_time"], -item["transport_time"]))
-        return ("transport", random.choice(idle_mobile_ids), job["id"])
+        return ("transport", idle_mobile_ids[0], job["id"])
 
     return ("wait", None, None)
 
 
 def run_baseline():
     env = create_env()
-    state = env.reset()
+    state = env.reset().model_dump()
 
     total_reward = 0.0
     done = False
@@ -43,7 +41,8 @@ def run_baseline():
     while not done and steps < max_steps:
         action = choose_action(state)
         print(f"Step {steps+1} Action: {action}")
-        state, reward, done, info = env.step(action)
+        observation, reward, done, info = env.step(action)
+        state = observation.model_dump()
         total_reward += reward
         steps += 1
         print(f"Reward: {reward:.2f}, Done: {done}, Info: {info}")
