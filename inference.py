@@ -209,7 +209,7 @@ def run_task(client: OpenAI, task_name: str) -> None:
                 break
 
         if final_state:
-            score = max(0.0, min(1.0, float(grade_task(task_name, final_state))))
+            score = float(grade_task(task_name, final_state))
         success = score >= SUCCESS_SCORE_THRESHOLD
     except Exception as e:
         import traceback

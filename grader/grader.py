@@ -46,7 +46,7 @@ def grade(state: Dict[str, Any]) -> float:
         + (0.20 * on_time_ratio)
         - (0.10 * late_penalty)
     )
-    score = max(0.0, min(1.0, score))
+    score = max(0.0001, min(0.9999, score))
     return round(score, 4)
 
 
