@@ -9,10 +9,8 @@ from openai import OpenAI
 from env.models import FactoryAction
 from grader.grader import grade_task, list_tasks
 
-API_KEY = os.environ["API_KEY"]
-API_BASE_URL = os.environ["API_BASE_URL"]
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4.1-mini")
-ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:8000")
+ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:7860")
 TASK_CONFIG = os.getenv("TASK_LEVEL") or os.getenv("TASKS") or "easy,medium,hard"
 BENCHMARK = os.getenv("BENCHMARK_NAME", "factory_robot_openenv")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "100"))
@@ -213,14 +211,16 @@ def run_task(client: OpenAI, task_name: str) -> None:
         if final_state:
             score = max(0.0, min(1.0, float(grade_task(task_name, final_state))))
         success = score >= SUCCESS_SCORE_THRESHOLD
-    except Exception:
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         success = False
     finally:
         log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
 
 def run_inference():
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY, max_retries=0, timeout=5.0)
+    client = OpenAI(base_url=os.environ["API_BASE_URL"], api_key=os.environ["API_KEY"], max_retries=0, timeout=5.0)
     for task_name in parse_tasks():
         run_task(client, task_name)
 
