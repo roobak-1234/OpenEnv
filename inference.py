@@ -17,7 +17,6 @@ TASK_CONFIG = os.getenv("TASK_LEVEL") or os.getenv("TASKS") or "easy,medium,hard
 BENCHMARK = os.getenv("BENCHMARK_NAME", "factory_robot_openenv")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "100"))
 SUCCESS_SCORE_THRESHOLD = float(os.getenv("SUCCESS_SCORE_THRESHOLD", "0.6"))
-MODEL_CALLS_ENABLED = True
 
 SYSTEM_PROMPT = textwrap.dedent(
     """
@@ -136,11 +135,6 @@ def extract_json_object(text: str) -> dict[str, Any]:
 
 
 def get_model_action(client: OpenAI, task_name: str, step: int, state: dict[str, Any], history: list[str]) -> dict[str, Any]:
-    global MODEL_CALLS_ENABLED
-    heuristic = choose_action(state)
-    if not MODEL_CALLS_ENABLED:
-        return heuristic
-
     prompt = textwrap.dedent(
         f"""
         Task: {task_name}
@@ -166,9 +160,8 @@ def get_model_action(client: OpenAI, task_name: str, step: int, state: dict[str,
         payload = extract_json_object(text)
         action = FactoryAction(**payload)
         return action.model_dump()
-    except Exception:
-        MODEL_CALLS_ENABLED = False
-        return heuristic
+    except Exception as exc:
+        raise RuntimeError(f"Model call failed via API_BASE_URL proxy: {exc}") from exc
 
 def run_task(client: OpenAI, task_name: str) -> None:
     rewards: list[float] = []
