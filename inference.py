@@ -9,8 +9,8 @@ from openai import OpenAI
 from env.models import FactoryAction
 from grader.grader import grade_task, list_tasks
 
-API_KEY = os.getenv("OPENAI_API_KEY") or os.getenv("HF_TOKEN") or os.getenv("API_KEY") or "missing-api-key"
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = os.environ["API_KEY"]
+API_BASE_URL = os.environ["API_BASE_URL"]
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-4.1-mini")
 ENV_BASE_URL = os.getenv("ENV_BASE_URL", "http://localhost:8000")
 TASK_CONFIG = os.getenv("TASK_LEVEL") or os.getenv("TASKS") or "easy,medium,hard"

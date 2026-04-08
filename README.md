@@ -165,7 +165,7 @@ python inference.py
 
 The inference script:
 - uses the OpenAI client for model calls
-- reads `API_BASE_URL`, `MODEL_NAME`, and `HF_TOKEN` or `OPENAI_API_KEY`
+- reads `API_BASE_URL`, `API_KEY`, and `MODEL_NAME`
 - reads `ENV_BASE_URL` for the environment server
 - emits `[START]`, `[STEP]`, and `[END]` logs with normalized scores for each task
 
