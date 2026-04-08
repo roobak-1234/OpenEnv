@@ -15,6 +15,8 @@ TASK_CONFIG = os.getenv("TASK_LEVEL") or os.getenv("TASKS") or "easy,medium,hard
 BENCHMARK = os.getenv("BENCHMARK_NAME", "factory_robot_openenv")
 MAX_STEPS = int(os.getenv("MAX_STEPS", "100"))
 SUCCESS_SCORE_THRESHOLD = float(os.getenv("SUCCESS_SCORE_THRESHOLD", "0.6"))
+MIN_LOGGED_SCORE = 0.001
+MAX_LOGGED_SCORE = 0.999
 
 SYSTEM_PROMPT = textwrap.dedent(
     """
@@ -106,8 +108,9 @@ def log_step(step: int, action: str, reward: float, done: bool, error: str | Non
 
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    safe_score = max(MIN_LOGGED_SCORE, min(MAX_LOGGED_SCORE, float(score)))
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.3f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} score={safe_score:.3f} rewards={rewards_str}",
         flush=True,
     )
 

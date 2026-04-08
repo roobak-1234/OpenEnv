@@ -2,7 +2,7 @@ import unittest
 
 from env.environment import FactoryEnv
 from env.models import Job, Robot
-from grader.grader import grade
+from grader.grader import MAX_SCORE, MIN_SCORE, grade
 
 
 class FactoryEnvironmentTests(unittest.TestCase):
@@ -91,6 +91,46 @@ class FactoryEnvironmentTests(unittest.TestCase):
         self.assertFalse(info["valid_action"])
         self.assertIn("cannot process station type welding", info["error"])
         self.assertEqual(reward, 0.0)
+
+    def test_grade_is_strictly_inside_zero_and_one(self):
+        perfect_like_state = {
+            "jobs": [
+                {"completed": True, "transport_time": 1, "processing_time": 1},
+            ],
+            "mobile_robots": [{"id": "m_1"}],
+            "static_robots": [{"id": "s_1"}],
+            "time_step": 1,
+            "metrics": {
+                "valid_actions": 2,
+                "invalid_actions": 0,
+                "on_time_completions": 1,
+                "late_completions": 0,
+            },
+        }
+        empty_like_state = {
+            "jobs": [
+                {"completed": False, "transport_time": 1, "processing_time": 1},
+            ],
+            "mobile_robots": [{"id": "m_1"}],
+            "static_robots": [{"id": "s_1"}],
+            "time_step": 100,
+            "metrics": {
+                "valid_actions": 0,
+                "invalid_actions": 100,
+                "on_time_completions": 0,
+                "late_completions": 1,
+            },
+        }
+
+        high_score = grade(perfect_like_state)
+        low_score = grade(empty_like_state)
+
+        self.assertEqual(high_score, MAX_SCORE)
+        self.assertEqual(low_score, MIN_SCORE)
+        self.assertGreater(high_score, 0.0)
+        self.assertLess(high_score, 1.0)
+        self.assertGreater(low_score, 0.0)
+        self.assertLess(low_score, 1.0)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ from typing import Any, Dict
 
 
 TASK_NAMES = ("easy", "medium", "hard")
+MIN_SCORE = 0.001
+MAX_SCORE = 0.999
 
 
 def grade(state: Dict[str, Any]) -> float:
@@ -46,7 +48,7 @@ def grade(state: Dict[str, Any]) -> float:
         + (0.20 * on_time_ratio)
         - (0.10 * late_penalty)
     )
-    score = max(0.0001, min(0.9999, score))
+    score = max(MIN_SCORE, min(MAX_SCORE, score))
     return round(score, 4)
 
 
