@@ -1,26 +1,27 @@
 environment:
   name: "Factory Robot Task Coordination"
-  description: "A time-based simulation environment for coordinating mobile and static robots in an industrial factory workflow."
+  description: "A time-based dispatch simulation for coordinating mobile and static robots across a staged factory backlog with release times, priorities, and SLA pressure."
   version: "2.0.0"
   benchmark: "factory_robot_openenv"
+  objective: "Dispatch released work orders to the correct specialist stations while maximizing on-time completion and controlling overdue backlog."
 
 tasks:
   - name: "easy"
-    description: "2 jobs, 1 mobile robot, 1 static robot"
+    description: "Single-cell assembly dispatch with a rush order, staged release timing, and simple priority tradeoffs"
     grader: "grader.grade_task('easy', state)"
   - name: "medium"
-    description: "5 jobs, 2 mobile robots, 2 static robots"
+    description: "Mixed assembly and welding schedule with staged releases, specialist bottlenecks, and moderate SLA pressure"
     grader: "grader.grade_task('medium', state)"
   - name: "hard"
-    description: "15 jobs, 3 mobile robots, 3 static robots"
+    description: "Multi-cell backlog with staggered arrivals, inspection bottlenecks, and persistent overdue-backlog risk"
     grader: "grader.grade_task('hard', state)"
 
 observation_space:
-  jobs: "List of current jobs with transport and processing status, durations, due step, priority, required station type, remaining time, and assigned robots"
-  mobile_robots: "List of mobile robots with occupancy, busy time remaining, and current job"
-  static_robots: "List of static robots with occupancy, busy time remaining, current job, and capability"
+  jobs: "List of current jobs with transport and processing status, source zone, release step, due step, priority, overdue time, required station type, remaining time, and assigned robots"
+  mobile_robots: "List of mobile robots with occupancy, busy time remaining, current job, and current task"
+  static_robots: "List of static robots with occupancy, busy time remaining, current job, capability, and home cell"
   time_step: "Current simulation time step integer"
-  metrics: "Episode-level statistics for action quality, robot utilization, progress, and total reward"
+  metrics: "Episode-level statistics for action quality, released work, overdue backlog, priority-weighted completion quality, robot utilization, progress, and total reward"
 
 typed_models:
   observation: "env.models.FactoryObservation"
@@ -28,19 +29,21 @@ typed_models:
   reward: "env.models.FactoryReward"
 
 action_space:
-  transport: "Assign a mobile robot to transport a job. Format: ('transport', robot_id, job_id)"
-  process: "Assign a static robot to process a job. Format: ('process', robot_id, job_id)"
-  wait: "Advance the simulation without a new assignment. Format: ('wait', None, None)"
+  transport: "Assign an idle mobile robot to a released job that has not yet been transported. Format: ('transport', robot_id, job_id)"
+  process: "Assign an idle specialist station robot to a transported job with matching capability. Format: ('process', robot_id, job_id)"
+  wait: "Advance the simulation when no productive assignment is available. Format: ('wait', None, None)"
 
 rewards:
   valid_assignment: 0.10
   transport_completed: 0.15
-  job_completed: 0.35
-  on_time_completion_bonus: 0.20
-  late_completion_penalty: 0.10
+  job_completed: 0.25
+  priority_weight_reward: 0.03
+  on_time_completion_bonus: 0.18
+  late_completion_penalty: 0.08
   invalid_action: 0.00
   idle_robot_penalty: 0.02
   waiting_job_penalty: 0.01
+  overdue_job_penalty: 0.02
   normalized_range: "[0.0, 1.0]"
 
 api:

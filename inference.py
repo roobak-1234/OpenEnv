@@ -70,6 +70,7 @@ def sort_key(job, state):
 
 def choose_action(state):
     jobs = state.get("jobs", [])
+    current_step = state.get("time_step", 0)
     idle_mobile_ids = [robot["id"] for robot in state.get("mobile_robots", []) if robot["status"] == "idle"]
     idle_static_robots = [robot for robot in state.get("static_robots", []) if robot["status"] == "idle"]
 
@@ -86,7 +87,12 @@ def choose_action(state):
 
     ready_for_transport = [
         job for job in jobs
-        if not job["transported"] and not job["completed"] and not job["in_transport"]
+        if (
+            current_step >= job.get("release_step", 0)
+            and not job["transported"]
+            and not job["completed"]
+            and not job["in_transport"]
+        )
     ]
     if idle_mobile_ids and ready_for_transport:
         job = sorted(ready_for_transport, key=lambda item: sort_key(item, state))[0]

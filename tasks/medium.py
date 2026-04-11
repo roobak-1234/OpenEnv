@@ -8,16 +8,20 @@ def create_env() -> FactoryEnv:
             transport_time=transport_time,
             processing_time=processing_time,
             required_station_type=station_type,
+            source_zone=source_zone,
             priority=priority,
+            release_step=release_step,
             due_step=due_step,
         )
-        for i, transport_time, processing_time, station_type, priority, due_step in zip(
+        for i, transport_time, processing_time, station_type, source_zone, priority, release_step, due_step in zip(
             range(1, 6),
             [1, 2, 1, 3, 2],
-            [2, 3, 1, 4, 2],
+            [2, 3, 1, 4, 3],
             ["assembly", "welding", "assembly", "welding", "assembly"],
+            ["receiving", "receiving", "qa_hold", "kitting", "kitting"],
             [3, 5, 2, 4, 4],
-            [6, 8, 4, 10, 7],
+            [0, 0, 1, 2, 3],
+            [6, 7, 4, 9, 8],
         )
     ]
     mobile_robots = [Robot(id=f"m_{i}", type="mobile") for i in range(1, 3)]

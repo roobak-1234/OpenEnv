@@ -57,6 +57,8 @@ class FactoryEnv:
         waiting_jobs = self._count_waiting_jobs()
         self._increment_wait_times()
         progress = self._advance_time()
+        overdue_jobs = self._update_overdue_jobs()
+        self.metrics["released_jobs"] = self._count_released_jobs()
         unfinished_jobs = sum(1 for job in self.jobs if not job.completed)
 
         reward = calculate_reward(
@@ -64,11 +66,13 @@ class FactoryEnv:
             action_type=action_type if valid else None,
             transports_completed=progress["transports_completed"],
             jobs_completed=progress["jobs_completed"],
+            completed_priority_weight=progress["completed_priority_weight"],
             on_time_completions=progress["on_time_completions"],
             late_completions=progress["late_completions"],
             idle_robots=idle_robots,
             unfinished_jobs=unfinished_jobs,
             waiting_jobs=waiting_jobs,
+            overdue_jobs=overdue_jobs,
         )
 
         self.time_step += 1
@@ -87,6 +91,9 @@ class FactoryEnv:
         self.metrics["jobs_completed"] += progress["jobs_completed"]
         self.metrics["on_time_completions"] += progress["on_time_completions"]
         self.metrics["late_completions"] += progress["late_completions"]
+        self.metrics["overdue_job_ticks"] += overdue_jobs
+        self.metrics["priority_weighted_completed"] += progress["completed_priority_weight"]
+        self.metrics["priority_weighted_on_time"] += progress["on_time_priority_weight"]
         self.metrics["total_reward"] = round(self.metrics["total_reward"] + reward, 2)
 
         return self.state(), reward, self._is_done(), info
@@ -101,8 +108,12 @@ class FactoryEnv:
             "wait_actions": 0,
             "jobs_transported": 0,
             "jobs_completed": 0,
+            "released_jobs": 0,
             "on_time_completions": 0,
             "late_completions": 0,
+            "overdue_job_ticks": 0,
+            "priority_weighted_completed": 0,
+            "priority_weighted_on_time": 0,
             "busy_robot_ticks": 0,
             "idle_robot_ticks": 0,
             "total_reward": 0.0,
@@ -151,11 +162,18 @@ class FactoryEnv:
                 return False, "Mobile robot not found."
             if robot.status != "idle":
                 return False, f"Mobile robot {robot.id} is currently busy."
+            if not self._job_is_released(target_job):
+                return False, (
+                    f"Job {target_job.id} has not been released yet. "
+                    f"It becomes available at step {target_job.release_step}."
+                )
             if target_job.completed or target_job.transported or target_job.in_transport or target_job.in_process:
                 return False, f"Job {target_job.id} is not ready for transport."
 
             self._assign_robot(robot=robot, job=target_job, task="transport", duration=target_job.transport_time)
-            info["events"].append(f"transport_started:{target_job.id}:{robot.id}")
+            info["events"].append(
+                f"transport_started:{target_job.id}:{robot.id}:{target_job.source_zone}->{target_job.required_station_type}"
+            )
             return True, None
 
         if action_type == "process":
@@ -197,6 +215,8 @@ class FactoryEnv:
         events: List[str] = []
         transports_completed = 0
         jobs_completed = 0
+        completed_priority_weight = 0
+        on_time_priority_weight = 0
         on_time_completions = 0
         late_completions = 0
 
@@ -233,11 +253,13 @@ class FactoryEnv:
                 target_job.processing_remaining_time = 0
                 target_job.assigned_static_robot_id = None
                 jobs_completed += 1
+                completed_priority_weight += target_job.priority
                 completion_step = self.time_step + 1
                 target_job.completed_on_time = completion_step <= target_job.due_step
                 target_job.late = not target_job.completed_on_time
                 if target_job.completed_on_time:
                     on_time_completions += 1
+                    on_time_priority_weight += target_job.priority
                 else:
                     late_completions += 1
                 events.append(f"processing_completed:{target_job.id}:{robot.id}")
@@ -248,7 +270,9 @@ class FactoryEnv:
             "events": events,
             "transports_completed": transports_completed,
             "jobs_completed": jobs_completed,
+            "completed_priority_weight": completed_priority_weight,
             "on_time_completions": on_time_completions,
+            "on_time_priority_weight": on_time_priority_weight,
             "late_completions": late_completions,
         }
 
@@ -267,14 +291,31 @@ class FactoryEnv:
         return sum(
             1
             for job in self.jobs
-            if not job.completed and not job.in_transport and not job.in_process
+            if self._job_is_released(job) and not job.completed and not job.in_transport and not job.in_process
         )
 
     def _increment_wait_times(self) -> None:
         for job in self.jobs:
-            if job.completed or job.in_transport or job.in_process:
+            if not self._job_is_released(job) or job.completed or job.in_transport or job.in_process:
                 continue
             job.accumulated_wait_time += 1
+
+    def _update_overdue_jobs(self) -> int:
+        overdue_jobs = 0
+        next_step = self.time_step + 1
+        for job in self.jobs:
+            if not self._job_is_released(job) or job.completed:
+                continue
+            if next_step > job.due_step:
+                job.overdue_steps += 1
+                overdue_jobs += 1
+        return overdue_jobs
+
+    def _count_released_jobs(self) -> int:
+        return sum(1 for job in self.jobs if self._job_is_released(job))
+
+    def _job_is_released(self, job: Job) -> bool:
+        return self.time_step >= job.release_step
 
     def _find_job(self, job_id: Optional[str]) -> Optional[Job]:
         if job_id is None:
